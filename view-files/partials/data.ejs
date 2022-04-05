@@ -1,0 +1,31 @@
+<div class="container-fluid mt-3">
+    <div class="row">
+
+        <div class="col-md-6">
+            <h2 class="text-center">Task List</h2>
+            <div id="taskContainer">
+              <% for( var i=0; i< todos.length; i++ ){ %>
+                <div class="task" id=<%= todos[i].id %>>
+                  <h4><%= todos[i].todo %></h4 class="del">
+                  <img src="<%= todos[i].img %>" alt="" height="50px" width="50px">
+                  <input type="checkbox" class="check" id="c<%= todos[i].id %>" <%= todos[i].done ? "checked" :"" %> />
+                  <a href="/edit/<%= todos[i].id %>">✏</a>
+                  <a href="/delete/<%= todos[i].id %>" class="btn btn-danger">X</a>
+                </div>
+            <% } %> 
+            </div>
+        </div>
+        
+        
+        <div class="col-md-6">
+            <h2 class="text-center">Add Task</h2>
+            <form class="mb-3" method="POST" action="/save" enctype="multipart/form-data">
+                <input type="text" name="task" class="form-control" placeholder="Add Your Task" required />
+                <div class="input-group mt-3">
+                    <input type="file" name="taskimage" required>
+                </div>
+                <input type="submit" value="Add Task" class="btn btn-primary mt-2" />
+            </form>
+        </div>
+    </div>
+</div>
