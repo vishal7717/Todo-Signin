@@ -1,18 +1,34 @@
 const express = require("express");
 const bodyParser = require('body-parser');
 const app = express();
-const fs = require("fs")
+//const fs = require("fs")
 const session = require("express-session")
 const multer  = require("multer")
+//const mongodb=require("mongodb")
+const db=require("./database/main")
+const userModel = require("./database/models/user.js")
+const todoModel = require("./database/models/todo.js");
+const res = require("express/lib/response");
 
 //start the server
 app.listen(3000, () => {
     console.log("Server is running at 3000 port")
 })
 
+//Database 
+// const MongoClient=mongodb.MongoClient;
+// const url="mongodb+srv://vishal:12345@cluster0.y2v89.mongodb.net/ToDoDB?retryWrites=true&w=majority"
 
+// const client=new MongoClient(url);
+// const dbName="ToDoDB"
+// var dbInstance=null;
+// client.connect().then(function(){
+//     console.log("DB is connected");
+//     dbInstance=client.db(dbName);
+// })
 
-
+//start db
+db.start();
 //EJS
 app.set("views", "view-files")
 app.set("view engine", "ejs")
@@ -71,21 +87,25 @@ app.get("/register",(req,res)=>{
 
 app.post("/signup", (req, res) => {
     // console.log(req.body)
-    readUserDB((users)=>{
-        let user = req.body;
+    let user = req.body;
+    findUserByUsername(user.username, (users) => {
         let flag = false;
-        for(let i=0;i<users.length;i++){
-            if(users[i].username == user.username){
+        // console.log(users, "from signup endpoint")
+        // console.log(user, "from signup endpoint")
+        for (let i = 0; i < users.length; i++) {
+            if (users[i].username === user.username) {
+                console.log(i, " ")
                 flag = true;
                 break;
             }
         }
-        if(flag){
-            res.render("signup.ejs",{message:"Username already exists"})
+        if (flag) {
+            // console.log("aa raha hai yahan pe")
+            res.render("signup.ejs", { message: "Username already exists" })
         }
-        else{
-            users.push(user);
-            writeUserDB(users);
+        else {
+            // console.log("else me aa raha hai ")
+            writeUserDB(user);
             res.redirect("/");
         }
     })
@@ -110,18 +130,16 @@ app.get("/home",(req,res)=>{
 
 app.post("/login", (req, res) => {
     // console.log(req.body)
-    readUserDB((users) => {
-        const user = users.find(user => user.username === req.body.username)
-        if (user == null) {
-            res.render("login.ejs", { message: "User not found" })
+    readUserDB(req.body.username,req.body.password,(user) => {
+       
+        if (user==null) {
+            res.render("login.ejs", { message: "User/password not Correct" })
         }
-        else if (user.password === req.body.password) {
+        
+        else {
             req.session.isLoggedIn = true;
             req.session.username = req.body.username;
             res.redirect("/home")
-        }
-        else {
-            res.render("login.ejs", { message: "Password is incorrect" })
         }
 
     })
@@ -134,30 +152,26 @@ app.get("/logout", function (req, res) {
     res.redirect("/")    // console.log("log out clicked")
 })
 
-
-
-
-function readUserDB(call) {
-    let users = [];
-    fs.readFile("./users.txt", "utf-8", (err, data) => {
-        if (err) {
-            console.log(err)
-        }
-        else if (data.length > 0) {
-            users = JSON.parse(data);
-        }
+function findUserByUsername(username,call){
+    userModel.find({username:username}).then(function(users){
         call(users);
     })
 }
 
 
-function writeUserDB(allUsers) {
-    fs.writeFile("./users.txt", JSON.stringify(allUsers), (err) => {
-        if (err) {
-            return 500;
-        }
-        return 200;
+function readUserDB(username,password,call) {
+   
+    userModel.findOne({username:username,password:password}).then(function(users){
+     console.log(users)
+        call(users);
     })
+}
+
+
+function writeUserDB(user) {
+   userModel.create({username:user.username,password:user.password},(err)=>{
+   console.log(err)
+   })
 }
 
 
@@ -169,7 +183,7 @@ function writeUserDB(allUsers) {
 
 app.post("/save", upload.single("taskimage") , (req, res) => {
     // console.log(req.body)
-    readToDoDB(allTodos=>{
+    
 
         let task = {
             username:req.session.username,
@@ -179,66 +193,57 @@ app.post("/save", upload.single("taskimage") , (req, res) => {
             img:req.file.path
         }
 
-        allTodos.push(task);
+        
         // console.log(allTodos);
-        writeToDoDB(allTodos);
+       saveToDoDB(task,()=>{
+           console.log("Task Added")
         res.redirect("/");
-    })
+    });
 })
 
 // for checking toDo
 app.post("/check", (req, res) => {
-    readToDoDB(allTodos => {
-        allTodos = allTodos.map(t => {
-            if (t.id === Number(req.body.id)) {
-                t.done = req.body.value;
-                return t;
-            }
-            else {
-                return t;
-            }
-        })
-        // console.log(allTodos)
-        writeToDoDB(allTodos);
-    })
-
-    res.redirect("/");
+   console.log(req.body.id);
+   todoModel.updateOne({id:Number(req.body.id)},{done:Boolean(req.body.value)}, (err)=>{
+     if(err){
+         console.log(err);
+     }
+    else{
+        console.log("data")
+    }
+   });
+   res.redirect("/");
 })
 
 // For Editing toDo
 
 app.get("/edit/:id", (req, res) => {
 
-    if(req.session.isLoggedIn){
-        readToDoDB(allTodos => {
-            editTodo = allTodos.filter(t => {
-                if (t.id === Number(req.params.id) && t.username === req.session.username) {
-                    t.done = req.body.value;
-                    return t;
-                }
-            })
-            // console.log(editTodo)
-           res.render("edit",{data:editTodo[0],username:editTodo[0].username})
+    if (req.session.isLoggedIn) {
+        readSingleToDo(req.params.id, toDo => {
+            console.log(toDo,"from edit ");
+            // console.log(toDo,"from edit id endpoint")
+            res.render("edit", { data: toDo, username: toDo.username })
         })
     }
-    else{
+    else {
         res.redirect("/");
     }
 
 })
 
+
 app.post("/update",(req,res)=>{
     // console.log(req.body.id)
-
-    readToDoDB((allTodos)=>{
-        let editTodo = allTodos.find(todo=>todo.id === Number(req.body.id))
-        editTodo.todo = req.body.task;
-
-        writeToDoDB(allTodos);
-
+ 
+     todoModel.updateOne({id:Number(req.body.id)},{todo:req.body.task},(err,data)=>{
+     if(err){
+         console.log(err);
+     }
+     else{
+         console.log("data")
+     }
     })
-
-
     res.redirect("/")
 })
 
@@ -249,25 +254,10 @@ app.post("/update",(req,res)=>{
 app.get("/delete/:id", (req, res) => {
 
     if(req.session.isLoggedIn){
-        readToDoDB(allTodos => {
-            let toRemoveTask = allTodos.find(todo => todo.id === Number(req.params.id))
-            allTodos = allTodos.filter(todo => {
-                return todo.id !== Number(req.params.id);
-            })
-            writeToDoDB(allTodos);
-            fs.unlink(toRemoveTask.img,(err)=>{
-                if(err){
-                    console.log(err)
-                }
-                else{
-                    console.log("deleted")
-                }
-            })
-    
-        })
-    
-        res.redirect("/");
-    }
+      todoModel.deleteOne({id:Number(req.params.id)}).then(()=>{
+      res.redirect("/");
+       })
+     }
     else{
         res.redirect("/");
     }
@@ -276,30 +266,23 @@ app.get("/delete/:id", (req, res) => {
 
 
 
-function readToDoDB(call) {
-    fs.readFile("./allToDos.txt", "utf-8", (err, data) => {
-        let todos = []
-        if (err) {
-            console.log(err)
-        }
-        else if (data.length > 0) {
-            todos = JSON.parse(data);
-            call(todos);
-        }
-        else{
-            todos = [];
-            call(todos);
-        }
+function readSingleToDo(tid,call) {
+    todoModel.findOne({id:Number(tid)}).then(function(ToDo){
+  // console.log(Todos,"from read function");
+            call(ToDo);
+        
     })
 }
 
 
-function writeToDoDB(allTodos) {
-    fs.writeFile("./allToDos.txt", JSON.stringify(allTodos), (err) => {
-        if (err) {
-            // res.status(500).send("Error Occured");
-            return 500;
-        }
-        return 200;
+function saveToDoDB(task,call) {
+   todoModel.create({username:task.username,id:task.id,todo:task.todo,done:task.done,img:task.img})
+    call();
+}
+
+function readToDoDB(call){
+    todoModel.find({}).then(function(allTodos){
+        //console.log(allTodos);
+        call(allTodos);
     })
 }
