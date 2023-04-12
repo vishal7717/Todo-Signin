@@ -1,6 +1,6 @@
 var mongoose = require('mongoose');
 
-const url = "mongodb+srv://vishal:12345@cluster0.y2v89.mongodb.net/ToDoDB?retryWrites=true&w=majority"
+const url = "mongodb+srv://user@cluster0.y2v89.mongodb.net/ToDoDB?retryWrites=true&w=majority"
 
 module.exports.start = function()
 {
